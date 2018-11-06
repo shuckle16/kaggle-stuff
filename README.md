@@ -1,2 +1,2 @@
 # kaggle-stuff
-some kaggle writeups
+Some kaggle writeups. Each dataset gets its own directory.
