@@ -1,33 +1,60 @@
 ---
 title: "Insurance"
-output: html_document
+output: 
+  html_document:
+    toc: TRUE
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, results = "asis")
-library(tidyverse)
-library(DT)
-library(skimr)
-
-ins <- read_csv("insurance.csv")
-
+## Setup
+```{r setup, echo = F, message = F}
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, results = 'asis'}
-knitr::kable(head(ins))
+```{r, message = F}
+library(tidyverse)
+library(skimr)
+library(GGally)
+library(visdat)
 
+ins <- read_csv("insurance.csv")
+```
+
+## EDA
+
+```{r}
+knitr::kable(head(ins))
+```
+
+The [skimr](https://github.com/ropensci/skimr) package is great for a quick look.
+```{r}
 skimr::skim(ins)
+```
+The `charges` column is skewed, as there are likely some drastic doctor bills out there. These are adults `min(age) = 18`, and `bmi` is bell shaped centered at 30.
+
+Big [r opensci](https://ropensci.org/) fan here. Their [visdat](https://github.com/ropensci/visdat) package gives you a 50,000 foot view of the data frame. It's useful for locating `NA`'s in specific cells. Thankfully we've got a well-behaved, rectangular, [tidy](http://vita.had.co.nz/papers/tidy-data.html) data frame.
+
+```{r}
 visdat::vis_dat(ins)
 ```
 
-```{r}
+I also enjoy pair plots for visualizing all of the two-column relationships in the data. `GGally::ggpairs` is nice for this.
+```{r, message = F}
 GGally::ggpairs(ins)
 ```
 
+Age and BMI are correlated with charges (`r round(cor(ins$charges, ins$age), 2)` and `r round(cor(ins$charges, ins$bmi), 2)` respectively). But the relationships aren't as simple and linear as I would like. Notice the strange triple data cloud in the bottom left cell (`charges ~ age`), and the weird lump in `charges ~ bmi`. There also is a big jump in charges for smokers that's worth investigating. 
+
+Can we narrow in on these questions with a more granular plot?
 ```{r}
 ggplot(ins,aes(x = age, y = charges, color = bmi)) + geom_point() + facet_wrap(~smoker) + scale_color_viridis_c()
 ```
 
+## Regression
+
 ```{r}
 summary(lm(charges ~ ., data = ins))
+```
+
+```{r}
+
 ```
