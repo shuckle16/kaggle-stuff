@@ -1,0 +1,33 @@
+---
+title: "Insurance"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = "asis")
+library(tidyverse)
+library(DT)
+library(skimr)
+
+ins <- read_csv("insurance.csv")
+
+```
+
+```{r, results = 'asis'}
+knitr::kable(head(ins))
+
+skimr::skim(ins)
+visdat::vis_dat(ins)
+```
+
+```{r}
+GGally::ggpairs(ins)
+```
+
+```{r}
+ggplot(ins,aes(x = age, y = charges, color = bmi)) + geom_point() + facet_wrap(~smoker) + scale_color_viridis_c()
+```
+
+```{r}
+summary(lm(charges ~ ., data = ins))
+```
