@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r, message = F}
 library(tidyverse)
+library(knitr)
 library(skimr)
 library(GGally)
 library(visdat)
@@ -44,17 +45,58 @@ GGally::ggpairs(ins)
 
 Age and BMI are correlated with charges (`r round(cor(ins$charges, ins$age), 2)` and `r round(cor(ins$charges, ins$bmi), 2)` respectively). But the relationships aren't as simple and linear as I would like. Notice the strange triple data cloud in the bottom left cell (`charges ~ age`), and the weird lump in `charges ~ bmi`. There also is a big jump in charges for smokers that's worth investigating. 
 
-Can we narrow in on these questions with a more granular plot?
+Can we narrow in on these questions with a more granular plot? This was my favorite from a few experiments.
 ```{r}
 ggplot(ins,aes(x = age, y = charges, color = bmi)) + geom_point() + facet_wrap(~smoker) + scale_color_viridis_c()
 ```
 
+Charges go up with age, smoking matters a lot, and there looks to be an interaction with smoking and bmi (the top cloud in the right facet). Next, let's measure these relationships with a few regression models.
+
 ## Regression
+
+The `y ~ .` syntax is a handy first pass for the busy analyst.
 
 ```{r}
 summary(lm(charges ~ ., data = ins))
 ```
 
-```{r}
+Now explore a few models to help understand the effect of smoking on charges. The five below were mostly derived from looking at the `ggpairs` plot and my custom `ggplot`. 
 
+```{r}
+huxtable::huxreg(
+  lm(charges ~ smoker, data = ins),
+  lm(charges ~ smoker + bmi, data = ins),
+  lm(charges ~ smoker + bmi + age, data = ins),
+  lm(charges ~ smoker * bmi + age, data = ins),
+  lm(charges ~ smoker * bmi * age, data = ins)
+)
 ```
+
+We've got three consistent estimates for the impact of smoking (around $23,000 a year). But the interaction terms are hard to interpret. They also muddle the main effect of `smoker` from the simpler models.
+
+What if we discretize `age` and `bmi` into two categories each--below average and above average? This will ideally make the interpretation of the models easier. No more "for each incremental x, on average is associated in an average change in charge of..." and the even more confusing interaction effects. 
+
+```{r}
+ins_disc <-
+  ins %>%
+  mutate(
+    bmi = bmi > mean(bmi),
+    age = age > mean(age) 
+  )
+
+huxtable::huxreg(
+  lm(charges ~ smoker, data = ins_disc),
+  lm(charges ~ smoker + bmi, data = ins_disc),
+  lm(charges ~ smoker + bmi + age, data = ins_disc),
+  lm(charges ~ smoker * bmi + age, data = ins_disc),
+  lm(charges ~ smoker * bmi * age, data = ins_disc)
+)
+```
+
+Here we see similar coefficients for `smoker` in the models without interactions ($23,000 a year). Once you add the term `smoker * bmi`, however, we see that the combination of having a higher than average bmi (>30) AND smoking is associated with a $14,500 + $18,800 = $33,000 increase in charges. This helps explain the cloud in the right facet I mentioned earlier. It's also interesting to see that bmi itself (as a main effect) is not significant here (notice all of the light points in the bottom cloud of the left facet who have fairly average charges). 
+
+## Conclusions
+
+* Smoking is associated with an increase in average charges by *at least* $12,000 a year. 
+* The interaction between smoking and bmi is nontrivial and possibly nonlinear.
+* Older people do have higher increase charges, and this pattern is eerily linear. This relationship, though, at the extremes, is about half of that of smoking. 
