@@ -47,10 +47,15 @@ Age and BMI are correlated with charges (`r round(cor(ins$charges, ins$age), 2)`
 
 Can we narrow in on these questions with a more granular plot? This was my favorite from a few experiments.
 ```{r}
-ggplot(ins,aes(x = age, y = charges, color = bmi)) + geom_point() + facet_wrap(~smoker) + scale_color_viridis_c()
+ggplot(ins,aes(x = age, y = charges, color = bmi)) + 
+  geom_point() + 
+  facet_wrap(~smoker) + 
+  scale_color_viridis_c() + 
+  ggtitle("Smoking, Age, and BMI are correlated with charges", 
+          subtitle = "In that order, roughly")
 ```
 
-Charges go up with age, smoking matters a lot, and there looks to be an interaction with smoking and bmi (the top cloud in the right facet). Next, let's measure these relationships with a few regression models.
+Smoking matters a lot, charges go up with age, and there looks to be an interaction with smoking and bmi (the top cloud in the right facet). Next, let's measure these relationships with a few regression models.
 
 ## Regression
 
@@ -99,4 +104,6 @@ Here we see similar coefficients for `smoker` in the models without interactions
 
 * Smoking is associated with an increase in average charges by *at least* $12,000 a year. 
 * The interaction between smoking and bmi is nontrivial and possibly nonlinear.
-* Older people do have higher increase charges, and this pattern is eerily linear. This relationship, though, at the extremes, is about half of that of smoking. 
+* Older people do have higher charges, and this pattern is eerily linear. This relationship, though, at the extremes, is about half the size of the smoking relationship. 
+
+One question I have for the data. What is going on in the upper cloud of the left facet of that ggplot--nonsmokers who have abnormally high charges? Perhaps for a later day..
