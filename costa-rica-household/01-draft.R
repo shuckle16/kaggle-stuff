@@ -23,6 +23,10 @@ train <-
   )
 
 # remove the annoying variables for now ----
+no_nas <- function(x) {
+  !any(is.na(x))
+}
+
 simple_basetable <-
   train %>% 
   dplyr::select(-Id, -idhogar, -hh_Target) %>%
