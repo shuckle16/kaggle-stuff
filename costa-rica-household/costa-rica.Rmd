@@ -1,0 +1,109 @@
+---
+title: "Costa Rica: Understanding the Complexities of Poverty"
+output: 
+  html_document:
+    toc: TRUE
+    code_folding: hide
+---
+
+```{r setup, include=FALSE, message = F}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The goals today are twofold. In line with the Kaggle instructions, I will first try to predict the poverty status variable (`Target`) as best as possible. But perhaps more importantly, I will try to understand exactly what explains poverty in this dataset by reducing and simplifying a model into a coherent form. Exploratory analysis involves not only understanding data, but also understanding the models that one prescribes to the data.
+
+## Basic EDA
+
+```{r, message = F}
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(nnet)
+library(randomForest)
+library(pROC)
+
+costa_rica <- read_csv("train.csv")
+data_dict  <- read_csv("data-dict.csv")
+```
+
+This is a fairly wide dataset (dimensions: `r nrow(costa_rica)` x `r ncol(costa_rica)`), which makes it difficult and time consuming to manually understand each feature. For now, I will check for `NA`'s and other oddities. [rOpenSsci's](https://ropensci.org/) `visdat` package makes this easy. The plot below is essentially a picture of the dataset at a 10,000 foot view.
+
+```{r, message = F}
+visdat::vis_dat(costa_rica %>% sample_frac(.01))
+```
+
+A couple of columns have a lot of `NA`'s. It's also nice to see the distribution of column types (mostly integers, a few doubles and a few characters). This is a good sanity check because the data dictionary suggests that many of the columns are countable measures.
+
+But the plot above makes it hard to read the column names. What exactly is in here? Below is a glimpse of the data dictionary.
+
+```{r, echo = F}
+head(data_dict, 10)
+```
+
+Pretty interesting features that describe households. There are a handful o The column names are in Spanish, so I will be referring back to the data dictionary often. 
+
+Each row in the dataset represents a person, so the `Target` column is that person's income status. The  (`idhogar`)
+
+And what about the `Target` variable? Kaggle notes that there are four income levels.
+
+  * 1: Extreme Poverty  
+  * 2: Moderate Poverty 
+  * 3: Vulnerable Households 
+  * 4: Non Vulnerable Households 
+
+```{r}
+ggplot(costa_rica, aes(x = Target)) + 
+  geom_bar(fill = "navy", alpha = .8) + 
+  ggtitle("Target Counts", 
+          subtitle = "Non Vulnerable Households by far the most common")
+```
+
+Because there are four levels, I will need to approach this as a [multinomial classification](https://en.wikipedia.org/wiki/Multiclass_classification) problem, which is unfortunately harder to interpret than binary classification or regression. It's also worth noting that the `Target` variable is skewed, with the count of level **4**'s dwarfing the others. This is thankfully a good thing for the people of Costa Rica, but it might make the analysis again more difficult. In machine learning jargon this is known as an imbalanced dataset. There are ways to ameliorate this "issue", but I might not need to examine them just yet.
+
+## Data Prep
+
+```{r, message = F}
+# re-assign Targets to appropriate head of household Targets ----
+parent_targets <- 
+  costa_rica %>% 
+  filter(parentesco1 == 1) %>%
+  dplyr::select(idhogar, hh_Target = Target)
+
+simple_basetable <- 
+  costa_rica %>% 
+  left_join(parent_targets) %>% 
+  mutate(
+    Target = if_else(is.na(hh_Target), Target, hh_Target)
+  )
+
+# remove the annoying variables for now ----
+no_nas <- function(x) {
+  !any(is.na(x))
+}
+
+simple_basetable <-
+  simple_basetable %>% 
+  dplyr::select(-Id, -idhogar, -hh_Target) %>%
+  dplyr::select_if(is.numeric) %>%  
+  dplyr::select_if(no_nas) %>% 
+  dplyr::select_if(.predicate = funs(sd(.) > 0))
+```
+
+The Kaggle instructions call for one prediction per household. So I converted every non head of household's `Target` level to its corresponding parent `Target` (`parentesco1 == 1`). For simplicity, I also decided to ignore any column with an `NA` and any non-numeric column. This reduced the dataset's dimensions to `r nrow(simple_basetable)` x `r ncol(simple_basetable)`.
+
+
+## Machine Learning Models: First Pass
+
+For a classification problem like this with many reasonable features (and for which I have little domain knowledge), I like to throw a random forest at it and see what sticks. [This post](https://medium.com/rants-on-machine-learning/the-unreasonable-effectiveness-of-random-forests-f33c3ce28883) on Medium gives a good background of why this is a fair choice. Not to mention [this paper](http://lowrank.net/nikos/pubs/empirical.pdf) referenced in the article (and written by very smart people at Cornell). 
+
+After splitting the cleaned up dataset 
+
+## Machine Learning Validation
+
+This is the [bike shed](https://en.wikipedia.org/wiki/Law_of_triviality) portion of the report. 
+
+## Variable Importance, Model Simplification
+
+## Conclusions and Next Steps
+
+I think the most interesting avenue for further research into this dataset is to engineer better features for the households.

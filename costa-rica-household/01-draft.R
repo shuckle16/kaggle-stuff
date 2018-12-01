@@ -1,23 +1,21 @@
 library(tidyverse)
 library(rpart)
-library(pROC)
+library(rpart.plot)
+library(nnet)
 library(randomForest)
+library(pROC)
 
-train <- read_csv("train.csv")
-test  <- read_csv("test.csv")
+cost_rica <- read_csv("train.csv")
 
 # re-assign Targets to appropriate head of household Targets ----
-get_parent_targets <- function(df) {
-  df %>% 
-    filter(parentesco1 == 1) %>%
-    dplyr::select(idhogar, hh_Target = Target)
-}
+parent_targets <- 
+  costa_rica %>% 
+  filter(parentesco1 == 1) %>%
+  dplyr::select(idhogar, hh_Target = Target)
 
-train_parent_targets <- get_parent_targets(train)
-
-train <- 
-  train %>% 
-  left_join(train_parent_targets) %>% 
+simple_basetable <- 
+  costa_rica %>% 
+  left_join(parent_targets) %>% 
   mutate(
     Target = if_else(is.na(hh_Target), Target, hh_Target)
   )
@@ -28,13 +26,13 @@ no_nas <- function(x) {
 }
 
 simple_basetable <-
-  train %>% 
+  simple_basetable %>% 
   dplyr::select(-Id, -idhogar, -hh_Target) %>%
   dplyr::select_if(is.numeric) %>%  
   dplyr::select_if(no_nas) %>% 
   dplyr::select_if(.predicate = funs(sd(.) > 0))
 
-# split up train and test
+# split up train and test ----
 train_rows <- sample(x = 1:nrow(simple_basetable), size = 0.8 * nrow(simple_basetable))
 
 simple_train <- 
@@ -49,19 +47,15 @@ simple_test <-
     !(row_number() %in% train_rows)
   )
 
-# single tree model ----
-treemod <- rpart(factor(Target) ~ ., data = simple_train)
-
-table(pred = predict(treemod, newdata = simple_test, type = "class") %>% as.character() %>% as.numeric(), actual = simple_test$Target)
-pROC::multiclass.roc(predict(treemod, newdata = simple_test, type = "class") %>% as.character() %>% as.numeric(), simple_test$Target)
-
 # random forest ----
 rfmod <- randomForest(factor(Target) ~ ., 
                       data = simple_train, 
-                      ntree = 15,
+                      ntree = 25,
                       importance = T)
 
-table(pred = predict(rfmod, newdata = simple_test) %>% as.character() %>% as.numeric(), actual = simple_test$Target)
-pROC::multiclass.roc(predict(rfmod, newdata = simple_test) %>% as.character() %>% as.numeric(), simple_test$Target)
+rfpred <- predict(rfmod, newdata = simple_test) %>% as.character() %>% as.numeric()
+
+table(pred = rfpred, actual = simple_test$Target)
+pROC::multiclass.roc(rfpred, simple_test$Target)
 
 varImpPlot(rfmod)
