@@ -63,7 +63,9 @@ predict_xgb <- function(mod, newdat)
     matrix(., ncol = 4, byrow = T) %>% 
     max.col() - 1
 }
-  
+
+# use bootstrapify to bootstrap the data 30 times ----
+# then split
 cv_df <- 
   simple_basetable %>% 
   strapgod::bootstrapify(30) %>% 
