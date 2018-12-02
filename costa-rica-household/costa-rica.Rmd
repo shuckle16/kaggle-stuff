@@ -10,9 +10,16 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-The goals today are twofold. In line with the Kaggle instructions, I will first try to predict the poverty status variable (`Target`) as best as possible. But perhaps more importantly, I will try to understand exactly what explains poverty in this dataset by reducing and simplifying a model into a coherent form. Exploratory analysis involves not only understanding data, but also understanding the models that one prescribes to the data.
+The goals today are twofold. In line with the Kaggle instructions, I will first 
+try to predict the poverty status variable (`Target`) as best as possible. But 
+perhaps more importantly, I will try to understand exactly what explains poverty 
+in this dataset by reducing and simplifying a model into a coherent form. 
+Exploratory analysis involves not only understanding data, but also 
+understanding the models that one prescribes to the data.
 
 ## Setup
+
+Load some of my favorite packages, read some csv's. 
 ```{r, message = F}
 library(tidyverse)
 library(rpart)
@@ -22,27 +29,40 @@ library(randomForest)
 library(caret)
 library(pROC)
 
-costa_rica <- read_csv("train.csv")
-data_dict  <- read_csv("data-dict.csv")
+costa_rica <- read_csv("data/train.csv")
+data_dict  <- read_csv("data/data-dict.csv")
 ```
 
 ## Basic EDA
 
-This is a fairly wide dataset (dimensions: `r nrow(costa_rica)` x `r ncol(costa_rica)`), which makes it difficult and time consuming to manually understand each feature. For now, I will check for `NA`'s and other oddities. [rOpenSsci's](https://ropensci.org/) `visdat` package makes this easy. The plot below is essentially a picture of the dataset at a 10,000 foot view.
+This is a fairly wide dataset (dimensions: `r nrow(costa_rica)` x `r ncol(costa_rica)`), 
+which makes it difficult and time consuming to manually understand each feature. For 
+now, I will check for `NA`'s and other oddities. [rOpenSsci's](https://ropensci.org/) `visdat` 
+package makes this easy. The plot below is essentially a picture of the 
+dataset at a 10,000 foot view.
 
 ```{r, message = F, fig.width = 10}
 visdat::vis_dat(costa_rica %>% sample_frac(.01))
 ```
 
-A couple of columns have a lot of `NA`'s. It's also nice to see the distribution of column types (mostly integers, a few doubles and a few characters). This is a good sanity check because the data dictionary suggests that many of the columns are countable measures.
+A couple of columns have a lot of `NA`'s. It's also nice to see the distribution 
+of column types (mostly integers, a few doubles and a few characters). This is a 
+good sanity check because the data dictionary suggests that many of the 
+columns are countable measures.
 
-But the plot above makes it hard to read the column names. What exactly is in here? Below is a glimpse of the data dictionary.
+But the plot above makes it hard to read the column names. 
+What exactly is in here? Below is a glimpse of the data dictionary.
 
 ```{r, echo = F}
 head(data_dict, 10)
 ```
 
-Pretty interesting stuff. There are a handful of features pertaining to things like education, housing quality, and access to technology. The column names are in Spanish, so I will be referring back to the data dictionary often. Each row in the dataset represents a person, so the `Target` column is that person's income status. The Kaggle problem, however, wants a prediction for each household (`idhogar`), so I will have to do a little transformation.
+Pretty interesting stuff. There are a handful of features pertaining to things 
+like education, housing quality, and access to technology. The column names are 
+in Spanish, so I will be referring back to the data dictionary often. Each row 
+in the dataset represents a person, so the `Target` column is that person's 
+income status. The Kaggle problem, however, wants a prediction for each 
+household (`idhogar`), so I will have to do a little transformation.
 
 And what about the `Target` variable? Kaggle notes that there are four income levels.
 
@@ -58,7 +78,14 @@ ggplot(costa_rica, aes(x = Target)) +
           subtitle = "Non Vulnerable Households by far the most common")
 ```
 
-Because there are four levels, I will need to approach this as a [multinomial classification](https://en.wikipedia.org/wiki/Multiclass_classification) problem, which is unfortunately harder to interpret than binary classification or regression. It's also worth noting that the `Target` variable is skewed, with the count of level **4**'s dwarfing the others. This is thankfully a good thing for the people of Costa Rica, but it might make the analysis again more difficult. In machine learning jargon this is known as an imbalanced dataset. There are ways to ameliorate this "issue", but I might not need to examine them just yet.
+Because there are four levels, I will need to approach this as a 
+[multinomial classification](https://en.wikipedia.org/wiki/Multiclass_classification) problem, 
+which is unfortunately harder to interpret than binary classification or regression. 
+It's also worth noting that the `Target` variable is skewed, with the count of 
+level **4**'s dwarfing the others. This is thankfully a good thing for the people of Costa Rica, 
+but it might make the analysis again more difficult. In machine learning jargon this is known 
+as an imbalanced dataset. There are ways to ameliorate this issue, but I might not need 
+to examine them just yet.
 
 ## Data Prep
 
@@ -89,12 +116,21 @@ costa_rica_adj<-
   dplyr::select_if(.predicate = funs(sd(.) > 0))
 ```
 
-The Kaggle instructions call for one prediction per household. So I converted every non head of household's `Target` level to its corresponding parent `Target` (`parentesco1 == 1`). For simplicity, I also decided to ignore any column with an `NA` and any non-numeric column. This reduced the dataset's dimensions to `r nrow(costa_rica_adj)` x `r ncol(costa_rica_adj)`.
+The Kaggle instructions call for one prediction per household. So I converted every non 
+head of household's `Target` level to its corresponding parent `Target` (`parentesco1 == 1`). 
+For simplicity, I also decided to ignore any column with an `NA` and any non-numeric 
+column. This reduced the dataset's dimensions to `r nrow(costa_rica_adj)` x `r ncol(costa_rica_adj)`.
 
 
 ## Machine Learning Models: First Pass
 
-For a classification problem like this with many reasonable features (and for which I have little domain knowledge), I like to throw a random forest at it and see what sticks. [This post](https://medium.com/rants-on-machine-learning/the-unreasonable-effectiveness-of-random-forests-f33c3ce28883) on Medium gives a good background of why this is a fair choice. Not to mention [this paper](http://lowrank.net/nikos/pubs/empirical.pdf) referenced in the article (and written by very smart people at Cornell). 
+For a classification problem like this with many reasonable features 
+(and for which I have little domain knowledge), I like to throw a random forest at it and 
+see what sticks. 
+[This post](https://medium.com/rants-on-machine-learning/the-unreasonable-effectiveness-of-random-forests-f33c3ce28883) on 
+Medium gives a good background of why this is a fair choice. Not to 
+mention [this paper](http://lowrank.net/nikos/pubs/empirical.pdf) referenced in the 
+article (and written by very smart people at Cornell). 
 
 ```{r, message = F}
 # split up train and test ----
@@ -115,37 +151,50 @@ test <-
 rfmod <- randomForest(factor(Target) ~ ., data = train, ntree = 50)
 ```
 
-After splitting the cleaned up dataset into `train` and `test` data frames, I built a random forest with 50 trees. The plot below, however, suggests I might not even need that many.
+After splitting the cleaned up dataset into `train` and `test` data frames, I built a 
+random forest with 50 trees. The plot below, however, suggests I might not even need that many.
 
 ```{r}
 plot(rfmod)
 ```
 
-Each of the lines above represent the relationship between accuracy and the number of trees. The dashed and dotted ones represent each of the `Target` levels (red = **1**, green = **2**, blue = **3**, light blue = **4**), while the black line represents the overall model accuracy. I've also got the output of the confusion matrix below.
+Each of the lines above represent the relationship between accuracy and the number 
+of trees. The dashed and dotted ones represent each of the `Target` levels 
+(red = **1**, green = **2**, blue = **3**, light blue = **4**), while the black line 
+represents the overall model accuracy. I've also got the output of the confusion matrix below.
 
 ```{r, message = F}
 rfpreds <- predict(rfmod, newdata = test) %>% as.character() %>% as.numeric()
 
-caret::confusionMatrix(table(rfpreds, actual = test$Target))
+cm <- caret::confusionMatrix(table(rfpreds, actual = test$Target))
+
+cm$table %>% ftable() %>% pander::pander()
+
+cm$byClass %>% data.frame() %>% dplyr::select(Sensitivity, Specificity) %>% t() %>% knitr::kable()
 ```
 
 A couple of points to emphasize here. 
 
-* There is a lot of discrepancy between the errors for each level. For `Target = 3`, the sensitivity (true positive) is around 30%, whereas for `Target = 4`, it is around 1%.
+* There is a lot of discrepancy between the errors for each level. For `Target = 3`, 
+the sensitivity (true positive) is around 30%, whereas for `Target = 4`, it is around 1%. 
+The confusion matrix also suggests that the difference between `Target = 3` and `Target = 4` 
+is pretty subtle, as most of the misclassifications of **3** were put in the **4** bucket.
 
-* The benefit of adding trees diminishes quickly. The errors for `ntree = 15` versus `ntree = 50` are within a percentage point or two. With this in mind, it seems that the only way to do much better for this problem by
+* The benefit of adding trees diminishes quickly. The errors for `ntree = 15` versus 
+`ntree = 50` are within a percentage point or two. With this in mind, it seems that 
+the only way to do much better for this problem by
     * exploring other models or
     * engineering new features
     
-I'll explore the first of these in the next section.
-
-
+    I'll explore the first of these in the next section.
 
 ## Machine Learning Validation
 
-This is the [bike shed](https://en.wikipedia.org/wiki/Law_of_triviality) portion of the report. But I will say, the final graph is a big argument for ensemble methods and/or boosting.
+This is the [bike shed](https://en.wikipedia.org/wiki/Law_of_triviality) portion of 
+the report. But I will say, the final graph is a big argument for ensemble methods and/or boosting.
 
-How do other models perform on this data? I decided to explore a few others that natively support multinomial classification in R. 
+How do other models perform on this data? I decided to explore a few others 
+that natively support multinomial classification in R. 
 
 * Decision Trees from the `rpart` package
 
@@ -155,13 +204,21 @@ How do other models perform on this data? I decided to explore a few others that
 
 * eXtreme Gradient Boosted Trees from the `xgboost` package
 
-The first two could be called "interpretable", while the next two are pretty much black boxes. Comparing these models lets me quantify the tradeoffs of interpretability and predictive performance, which falls nicely in line with my other main goal today. 
+The first two could be called "interpretable", while the next two are pretty much 
+black boxes. Comparing these models lets me quantify the tradeoffs of interpretability 
+and predictive performance, which falls nicely in line with my other main goal today. 
 
-Below is the output of 30 cross validated 
+Below is the output of a 30-fold cross validation for each of the models above. Each time, I measured the [AUC](https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve) by 
+comparing the individual fold's predictions to the individual fold's holdout set. The AUC has a 
+slightly different interpretation 
+[in the multiclass scenario](https://stats.stackexchange.com/questions/2151/how-to-plot-roc-curves-in-multiclass-classification), 
+but this is a fact I will gloss over for now.
 
+In short, we see that the random forests take the cake. 
 
 ## Variable Importance, Model Simplification
 
 ## Conclusions and Next Steps
 
-I think the most interesting avenue for further research into this dataset is to engineer better features for the households.
+I think the most interesting avenue for further research into this dataset is to 
+engineer better features for the households.

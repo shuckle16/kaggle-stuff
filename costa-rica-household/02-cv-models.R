@@ -1,3 +1,6 @@
+library(strapgod)
+library(xgboost)
+
 # prelims ----
 xgb_params <- list("objective"   = "multi:softprob",
                    "eval_metric" = "mlogloss",
@@ -65,9 +68,11 @@ predict_xgb <- function(mod, newdat)
 }
 
 # use bootstrapify to bootstrap the data 30 times ----
-# then split
+# then split into train / test and make use of 
+# nested dataframes. keep track of the appropriate
+# true values the whole time
 cv_df <- 
-  simple_basetable %>% 
+  train %>% 
   strapgod::bootstrapify(30) %>% 
   collect() %>% 
   group_by(.bootstrap) %>% 
@@ -93,5 +98,15 @@ cv_df <-
     actual = purrr::map(test,~.x %>% pull(Target)))
 
 # evaluate ----
-cv_df %>% 
-  unnest(treepreds, multinompreds, rfpreds, xgbpreds)
+votes_df <- 
+  cv_df %>% 
+  unnest(treepreds, multinompreds, rfpreds, xgbpreds, actual)
+
+# auc plot
+votes_df %>% 
+  gather(key = model, value = pred, -.bootstrap,-actual) %>% 
+    group_by(.bootstrap, model) %>% 
+    summarize(auc = pROC::multiclass.roc(pred, actual)$auc) %>% 
+    ggplot(aes(x = reorder(model,auc), y = auc)) + 
+      geom_boxplot(fill = "navy", alpha = .4) + 
+      xlab("model")

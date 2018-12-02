@@ -5,7 +5,7 @@ library(nnet)
 library(randomForest)
 library(pROC)
 
-cost_rica <- read_csv("train.csv")
+cost_rica <- read_csv("data/train.csv")
 
 # re-assign Targets to appropriate head of household Targets ----
 parent_targets <- 
