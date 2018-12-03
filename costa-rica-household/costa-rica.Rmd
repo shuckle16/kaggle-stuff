@@ -289,9 +289,13 @@ ggplot(xgb_top10_cols,
           subtitle = "Many of the same as random forest")
 ```
 
-Again we see similar results, although not exactly the same column names. Could this be because several of the columns are related to each other?
+Again we see similar results, although not exactly the same column names. 
+Could this be because several of the columns are related to each other?
 
-Here's a thought. What if we take the top 30 features from both models, find the intersection between them, and then build a final model off of that? How much worse will it perform than the original random forest? The table below are the features that are ranked in the top 30 of both models.
+Here's a thought. What if we take the top 30 features from both models, 
+find the intersection between them, and then build a final model off 
+of that? How much worse will it perform than the original random forest? 
+The table below are the features that are ranked in the top 30 of both models.
 
 ```{r}
 overlapping_vars <- 
@@ -311,7 +315,10 @@ inner_join(
 overlapping_vars %>% knitr::kable()
 ```
 
-There are `r nrow(overlapping_vars)` of them. Now train an updated random forest with `r nrow(overlapping_vars)` / `r ncol(train) - 1` = `r round(nrow(overlapping_vars) / (ncol(train) - 1), 2) * 100`% of its original features.
+There are `r nrow(overlapping_vars)` of them. 
+Now train an updated random forest with 
+`r nrow(overlapping_vars)` / `r ncol(train) - 1` = `r round(nrow(overlapping_vars) / (ncol(train) - 1), 2) * 100`% 
+of its original features.
 
 ```{r}
 rfmod_simple <- randomForest(factor(Target) ~ ., data = train %>% dplyr::select(overlapping_vars$col_name, Target), ntree = 50)
