@@ -258,7 +258,11 @@ top10_cols %>%
   knitr::kable()
 ```
 
-The `r4**` columns all have to do with age distribution and dependency statuses of the family. `coopele`, `qmobilephone` involve access to electricity. And we've got a few that are associated with household amenities (`sanitario*`, `energicocinar*`). Most of these make sense. What does the `xgboost` model suggest? A side note, the code for this wasn't as easy as the `randomForest` above. 
+The `r4**` columns all have to do with age distribution and dependency statuses 
+of the family. `coopele`, `qmobilephone` involve access to electricity. And we've got 
+a few that are associated with household amenities (`sanitario*`, `energicocinar*`). 
+Most of these make sense. What does the `xgboost` model suggest? A side note, the 
+code for this wasn't as easy as the `randomForest` above. 
 
 ```{r, message = F}
 xgb_params <- list("objective" = "multi:softprob",
