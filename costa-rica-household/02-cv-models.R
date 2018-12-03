@@ -103,10 +103,21 @@ votes_df <-
   unnest(treepreds, multinompreds, rfpreds, xgbpreds, actual)
 
 # auc plot
-votes_df %>% 
+auc_plot <- 
+  votes_df %>% 
   gather(key = model, value = pred, -.bootstrap,-actual) %>% 
     group_by(.bootstrap, model) %>% 
-    summarize(auc = pROC::multiclass.roc(pred, actual)$auc) %>% 
+    summarize(
+      auc = pROC::multiclass.roc(pred, actual)$auc
+      ) %>%
+    mutate(
+      model = str_replace(string = model, pattern = "preds", replacement = "")
+      ) %>% 
     ggplot(aes(x = reorder(model,auc), y = auc)) + 
       geom_boxplot(fill = "navy", alpha = .4) + 
-      xlab("model")
+      xlab("model") +
+      ggtitle("Cross Validated Performance of 4 Different Models",
+              subtitle = "Complexities in the data call for complicated models") +
+      theme(title = element_text(size = 20))
+
+ggsave("pics/cv-aucs.png", plot = auc_plot)

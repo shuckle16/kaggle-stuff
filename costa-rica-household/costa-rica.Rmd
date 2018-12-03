@@ -26,6 +26,7 @@ library(rpart)
 library(rpart.plot)
 library(nnet)
 library(randomForest)
+library(xgboost)
 library(caret)
 library(pROC)
 
@@ -37,11 +38,11 @@ data_dict  <- read_csv("data/data-dict.csv")
 
 This is a fairly wide dataset (dimensions: `r nrow(costa_rica)` x `r ncol(costa_rica)`), 
 which makes it difficult and time consuming to manually understand each feature. For 
-now, I will check for `NA`'s and other oddities. [rOpenSsci's](https://ropensci.org/) `visdat` 
+now, I will check for `NA`'s and other oddities. [rOpenSsci's][1] `visdat` 
 package makes this easy. The plot below is essentially a picture of the 
 dataset at a 10,000 foot view.
 
-```{r, message = F, fig.width = 10}
+```{r, message = F, out.width = '90%'}
 visdat::vis_dat(costa_rica %>% sample_frac(.01))
 ```
 
@@ -71,7 +72,7 @@ And what about the `Target` variable? Kaggle notes that there are four income le
   * 3: Vulnerable Households 
   * 4: Non Vulnerable Households 
 
-```{r}
+```{r, out.width = '90%'}
 ggplot(costa_rica, aes(x = Target)) + 
   geom_bar(fill = "navy", alpha = .8) + 
   ggtitle("Target Counts", 
@@ -79,7 +80,7 @@ ggplot(costa_rica, aes(x = Target)) +
 ```
 
 Because there are four levels, I will need to approach this as a 
-[multinomial classification](https://en.wikipedia.org/wiki/Multiclass_classification) problem, 
+[multinomial classification][2] problem, 
 which is unfortunately harder to interpret than binary classification or regression. 
 It's also worth noting that the `Target` variable is skewed, with the count of 
 level **4**'s dwarfing the others. This is thankfully a good thing for the people of Costa Rica, 
@@ -127,9 +128,9 @@ column. This reduced the dataset's dimensions to `r nrow(costa_rica_adj)` x `r n
 For a classification problem like this with many reasonable features 
 (and for which I have little domain knowledge), I like to throw a random forest at it and 
 see what sticks. 
-[This post](https://medium.com/rants-on-machine-learning/the-unreasonable-effectiveness-of-random-forests-f33c3ce28883) on 
+[This post][3] on 
 Medium gives a good background of why this is a fair choice. Not to 
-mention [this paper](http://lowrank.net/nikos/pubs/empirical.pdf) referenced in the 
+mention [this paper][4] referenced in the 
 article (and written by very smart people at Cornell). 
 
 ```{r, message = F}
@@ -148,13 +149,14 @@ test <-
     !(row_number() %in% train_rows)
   )
 
-rfmod <- randomForest(factor(Target) ~ ., data = train, ntree = 50)
+set.seed(1)
+rfmod <- randomForest(factor(Target) ~ ., data = train, ntree = 50, importance = T)
 ```
 
 After splitting the cleaned up dataset into `train` and `test` data frames, I built a 
 random forest with 50 trees. The plot below, however, suggests I might not even need that many.
 
-```{r}
+```{r, out.width = '90%'}
 plot(rfmod)
 ```
 
@@ -190,7 +192,7 @@ the only way to do much better for this problem by
 
 ## Machine Learning Validation
 
-This is the [bike shed](https://en.wikipedia.org/wiki/Law_of_triviality) portion of 
+This is the [bike shed][5] portion of 
 the report. But I will say, the final graph is a big argument for ensemble methods and/or boosting.
 
 How do other models perform on this data? I decided to explore a few others 
@@ -208,17 +210,164 @@ The first two could be called "interpretable", while the next two are pretty muc
 black boxes. Comparing these models lets me quantify the tradeoffs of interpretability 
 and predictive performance, which falls nicely in line with my other main goal today. 
 
-Below is the output of a 30-fold cross validation for each of the models above. Each time, I measured the [AUC](https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve) by 
-comparing the individual fold's predictions to the individual fold's holdout set. The AUC has a 
-slightly different interpretation 
-[in the multiclass scenario](https://stats.stackexchange.com/questions/2151/how-to-plot-roc-curves-in-multiclass-classification), 
-but this is a fact I will gloss over for now.
+Below is the output of a 30-fold cross validation for each of the models above. Each time, 
+I measured the [AUC][6] by comparing the individual fold's predictions to the individual 
+fold's holdout set. The AUC has a slightly different interpretation [in the multiclass scenario][7], 
+but this is a fact I will gloss over for now. If you are interested in the simulation code, 
+it is [here][8].
 
-In short, we see that the random forests take the cake. 
+```{r, out.width = '90%'}
+knitr::include_graphics("pics/cv-aucs.png")
+```
+
+In short, we see that the random forests take the cake. And the average difference 
+between the two baseline models and the two complicated models is somewhere in the 
+realm of .15 AUC points. Which is quite a lot, considering that the practical domain 
+of AUC's is between .5 and 1.0. By using a simpler model, I would be potentially 
+sacrificing a lot of classification effectiveness.  
 
 ## Variable Importance, Model Simplification
 
+This is not to say that there is no hope of understanding what the models are 
+doing. Both `randomForest` and `xgboost` have built in methods to assess variable 
+importance (which in my humble opinion is one of the most important areas of 
+machine learning right now). Because both algorithms involve many iterations / samples, 
+they are able to store the average marginal impact a specific column has on 
+classification accuracy. This results in a big-picture ranking of 
+columns from "most important" to "least important". 
+
+The plot below is the ranking done by the original `randomForest` model.
+
+```{r}
+varImpPlot(rfmod, type = 1, pch = 20, col = "navy", cex = .9)
+```
+
+The most important predictors require a consultation with the data dictionary. Here are the top 10.
+
+```{r, message = F}
+top10_cols <- 
+  importance(rfmod) %>% 
+  data.frame() %>% 
+  rownames_to_column(var = "col_name") %>% 
+  arrange(desc(MeanDecreaseAccuracy)) %>% 
+  head(10)
+
+top10_cols %>% 
+  inner_join(data_dict) %>% 
+  dplyr::select(col_name, description) %>% 
+  knitr::kable()
+```
+
+The `r4**` columns all have to do with age distribution and dependency statuses of the family. `coopele`, `qmobilephone` involve access to electricity. And we've got a few that are associated with household amenities (`sanitario*`, `energicocinar*`). Most of these make sense. What does the `xgboost` model suggest? A side note, the code for this wasn't as easy as the `randomForest` above. 
+
+```{r, message = F}
+xgb_params <- list("objective" = "multi:softprob",
+                   "eval_metric" = "mlogloss",
+                   "num_class" = 4)
+
+xgbmod <- 
+  xgboost(
+    xgb.DMatrix(
+      as.matrix(train %>% dplyr::select(-Target)),
+      label = (train %>% pull(Target) -1 )
+    ), 
+    nrounds = 20, verbose = 0, 
+    params = xgb_params)
+  
+xgb_top10_cols <- 
+  xgb.importance(
+    feature_names = colnames(train %>% dplyr::select(-Target)), 
+    model = xgbmod) %>% 
+    head(10)
+
+ggplot(xgb_top10_cols,
+       aes(x = reorder(Feature, Gain), y = Gain)) + 
+  geom_col(fill = "navy", alpha = .8) + 
+  xlab("Feature") +
+  coord_flip() + 
+  ggtitle("xgboost feature importance", 
+          subtitle = "Many of the same as random forest")
+```
+
+Again we see similar results, although not exactly the same column names. Could this be because several of the columns are related to each other?
+
+Here's a thought. What if we take the top 30 features from both models, find the intersection between them, and then build a final model off of that? How much worse will it perform than the original random forest? The table below are the features that are ranked in the top 30 of both models.
+
+```{r}
+overlapping_vars <- 
+  importance(rfmod) %>% 
+  data.frame() %>% 
+  rownames_to_column(var = "col_name") %>% 
+  arrange(desc(MeanDecreaseAccuracy)) %>% 
+  head(30) %>% 
+inner_join(
+  xgb.importance(
+    feature_names = colnames(train %>% dplyr::select(-Target)), 
+    model = xgbmod) %>% 
+    head(30),
+  by = c("col_name" = "Feature")
+)
+
+overlapping_vars %>% knitr::kable()
+```
+
+There are `r nrow(overlapping_vars)` of them. Now train an updated random forest with `r nrow(overlapping_vars)` / `r ncol(train) - 1` = `r round(nrow(overlapping_vars) / (ncol(train) - 1), 2) * 100`% of its original features.
+
+```{r}
+rfmod_simple <- randomForest(factor(Target) ~ ., data = train %>% dplyr::select(overlapping_vars$col_name, Target), ntree = 50)
+
+rfpreds_simple <- predict(rfmod_simple, newdata = test) %>% as.character() %>% as.numeric()
+
+cm2 <- caret::confusionMatrix(table(rfpreds_simple, actual = test$Target))
+
+cm2$table %>% ftable() %>% pander::pander()
+
+cm2$byClass %>% data.frame() %>% dplyr::select(Sensitivity, Specificity) %>% t() %>% knitr::kable()
+```
+
+For comparison, here's the results against the original 
+
+```{r}
+cm$table %>% ftable() %>% pander::pander()
+
+cm$byClass %>% data.frame() %>% dplyr::select(Sensitivity, Specificity) %>% t() %>% knitr::kable()
+
+```
+
+And if you're curious about AUC's, the original random Forest with 50 trees had 
+an AUC of `r pROC::multiclass.roc(rfpreds, test$Target)$auc` and the reduced model 
+has an AUC of `r pROC::multiclass.roc(rfpreds_simple, test$Target)$auc` against the same test set.
+Pretty nice. Interpretable dimensionality reduction (a hack) with no PCA.
+
+
 ## Conclusions and Next Steps
 
-I think the most interesting avenue for further research into this dataset is to 
-engineer better features for the households.
+Poverty in this dataset is primarily described by 
+
+  a) the number of working-age people
+  b) the access to electricity
+  c) the average educational level
+  
+of the member's household. Although this result is not exactly surprising,
+I think it's important to verify the output of the models with intuition when possible,
+especially considering the importance of the issue here.
+
+The most interesting avenue for further research into this dataset, in my opinion,
+is to investigate the difficult-to-classify cases and see if there are 
+commonalities among them. If this could be determined from within the data, 
+one could engineer clever new features to help train models. Other than that, 
+I would like to learn more about the culture and political 
+background of Costa Rica, along with the critical issues experts in the
+region deem important to reducing poverty. 
+
+I've had a lot of fun working on this problem and would like to thank the 
+Kaggle community for putting time and energy into questions like these.
+
+[1]: https://ropensci.org/
+[2]: https://en.wikipedia.org/wiki/Multiclass_classification
+[3]: https://medium.com/rants-on-machine-learning/the-unreasonable-effectiveness-of-random-forests-f33c3ce28883
+[4]: http://lowrank.net/nikos/pubs/empirical.pdf
+[5]: https://en.wikipedia.org/wiki/Law_of_triviality
+[6]: https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve
+[7]: https://stats.stackexchange.com/questions/2151/how-to-plot-roc-curves-in-multiclass-classification
+[8]: 02-cv-models.R
