@@ -30,7 +30,8 @@ The [skimr](https://github.com/ropensci/skimr) package is great for a quick look
 ```{r}
 skimr::skim(ins)
 ```
-The `charges` column is skewed, as there are likely some drastic doctor bills out there. These are adults `min(age) = 18`, and `bmi` is bell shaped centered at 30.
+The `charges` column is skewed, as there are likely some drastic doctor bills 
+out there. These are adults `min(age) = 18`, and `bmi` is bell shaped centered at 30.
 
 Big [r opensci](https://ropensci.org/) fan here. Their [visdat](https://github.com/ropensci/visdat) package gives you a 50,000 foot view of the data frame. It's useful for locating `NA`'s in specific cells. Thankfully we've got a well-behaved, rectangular, [tidy](http://vita.had.co.nz/papers/tidy-data.html) data frame.
 
@@ -43,9 +44,15 @@ I also enjoy pair plots for visualizing all of the two-column relationships in t
 GGally::ggpairs(ins)
 ```
 
-Age and BMI are correlated with charges (`r round(cor(ins$charges, ins$age), 2)` and `r round(cor(ins$charges, ins$bmi), 2)` respectively). But the relationships aren't as simple and linear as I would like. Notice the strange triple data cloud in the bottom left cell (`charges ~ age`), and the weird lump in `charges ~ bmi`. There also is a big jump in charges for smokers that's worth investigating. 
+Age and BMI are correlated with charges 
+(`r round(cor(ins$charges, ins$age), 2)` and `r round(cor(ins$charges, ins$bmi), 2)` respectively). 
+But the relationships aren't as simple and linear as I would like. Notice 
+the strange triple data cloud in the bottom left cell (`charges ~ age`), 
+and the weird lump in `charges ~ bmi`. There also is a big jump in 
+charges for smokers that's worth investigating. 
 
-Can we narrow in on these questions with a more granular plot? This was my favorite from a few experiments.
+Can we narrow in on these questions with a more granular plot? This was my 
+favorite from a few experiments.
 ```{r}
 ggplot(ins,aes(x = age, y = charges, color = bmi)) + 
   geom_point() + 
@@ -55,7 +62,9 @@ ggplot(ins,aes(x = age, y = charges, color = bmi)) +
           subtitle = "In that order, roughly")
 ```
 
-Smoking matters a lot, charges go up with age, and there looks to be an interaction with smoking and bmi (the top cloud in the right facet). Next, let's measure these relationships with a few regression models.
+Smoking matters a lot, charges go up with age, and there looks to 
+be an interaction with smoking and bmi (the top cloud in the right facet). 
+Next, let's measure these relationships with a few regression models.
 
 ## Regression
 
@@ -65,7 +74,9 @@ The `y ~ .` syntax is a handy first pass for the busy analyst.
 summary(lm(charges ~ ., data = ins))
 ```
 
-Now explore a few models to help understand the effect of smoking on charges. The five below were mostly derived from looking at the `ggpairs` plot and my custom `ggplot`. 
+Now explore a few models to help understand the effect of smoking 
+on charges. The five below were mostly derived from looking at 
+the `ggpairs` plot and my custom `ggplot`. 
 
 ```{r}
 huxtable::huxreg(
@@ -77,9 +88,16 @@ huxtable::huxreg(
 )
 ```
 
-We've got three consistent estimates for the impact of smoking (around $23,000 a year). But the interaction terms are hard to interpret. They also muddle the main effect of `smoker` from the simpler models.
+We've got three consistent estimates for the impact of 
+smoking (around $23,000 a year). But the interaction terms are 
+hard to interpret. They also muddle the main effect of `smoker` 
+from the simpler models.
 
-What if we discretize `age` and `bmi` into two categories each--below average and above average? This will ideally make the interpretation of the models easier. No more "for each incremental x, on average is associated in an average change in charge of..." and the even more confusing interaction effects. 
+What if we discretize `age` and `bmi` into two categories 
+each--below average and above average? This will ideally make the 
+interpretation of the models easier. No more "for each incremental x, 
+on average is associated in an average change in charge of..." 
+and the even more confusing interaction effects. 
 
 ```{r}
 ins_disc <-
@@ -98,7 +116,14 @@ huxtable::huxreg(
 )
 ```
 
-Here we see similar coefficients for `smoker` in the models without interactions ($23,000 a year). Once you add the term `smoker * bmi`, however, we see that the combination of having a higher than average bmi (>30) AND smoking is associated with a $14,500 + $18,800 = $33,000 increase in charges. This helps explain the cloud in the right facet I mentioned earlier. It's also interesting to see that bmi itself (as a main effect) is not significant here (notice all of the light points in the bottom cloud of the left facet who have fairly average charges). 
+Here we see similar coefficients for `smoker` in the models without 
+interactions ($23,000 a year). Once you add the term `smoker * bmi`, 
+however, we see that the combination of having a higher than average 
+bmi (>30) AND smoking is associated with a $14,500 + $18,800 = $33,000 
+increase in charges. This helps explain the cloud in the right facet 
+I mentioned earlier. It's also interesting to see that bmi itself 
+(as a main effect) is not significant here (notice all of the light 
+points in the bottom cloud of the left facet who have fairly average charges). 
 
 ## Conclusions
 
@@ -106,4 +131,6 @@ Here we see similar coefficients for `smoker` in the models without interactions
 * The interaction between smoking and bmi is nontrivial and possibly nonlinear.
 * Older people do have higher charges, and this pattern is eerily linear. This relationship, though, at the extremes, is about half the size of the smoking relationship. 
 
-One question I have for the data. What is going on in the upper cloud of the left facet of that ggplot--nonsmokers who have abnormally high charges? Perhaps for a later day..
+One question I have for the data. What is going on in the upper cloud 
+of the left facet of that ggplot--nonsmokers who have abnormally 
+high charges? Perhaps for a later day..
